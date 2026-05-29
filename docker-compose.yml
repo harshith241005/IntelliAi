@@ -1,0 +1,60 @@
+services:
+  mongodb:
+    image: mongo:7
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      MONGO_URI: mongodb://mongodb:27017/store_intelligence
+      PORT: 5000
+      MOCK_EVENTS: ${MOCK_EVENTS:-true}
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:5000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  ai-service:
+    build: ./ai-service
+    profiles: ["ai"]
+    restart: unless-stopped
+    environment:
+      API_URL: http://backend:5000/api/events
+      CAMERA_ID: CAM_01
+      VIDEO_SOURCE: "0"
+      CROWD_THRESHOLD: "20"
+    depends_on:
+      backend:
+        condition: service_healthy
+    # Webcam inside Docker needs device mapping on Linux:
+    # devices: ["/dev/video0:/dev/video0"]
+
+volumes:
+  mongo_data:

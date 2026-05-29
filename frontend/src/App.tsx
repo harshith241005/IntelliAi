@@ -1,246 +1,132 @@
 import React, { useState } from 'react';
-import { StreamProvider, useStream } from './context/StreamContext';
+import { StreamProvider } from './context/StreamContext';
 import { ConnectionStatus } from './components/ConnectionStatus';
-import { StoreSelector } from './components/StoreSelector';
 import { ErrorBoundary } from './components/ErrorBoundary';
-
-// Views
 import { LiveOps } from './views/LiveOps';
 import { EventExplorer } from './views/EventExplorer';
-import { IncidentDetail } from './views/IncidentDetail';
 import { AnomalyCenter } from './views/AnomalyCenter';
 import { Analytics } from './views/Analytics';
 import { CamerasAdmin } from './views/CamerasAdmin';
 import { SystemHealth } from './views/SystemHealth';
-
-// Icons
 import {
-  LayoutDashboard, Database, ShieldAlert, BarChart3, Camera, Cpu,
-  Menu, ChevronLeft, ChevronRight, User, Settings
+  LayoutDashboard,
+  Database,
+  ShieldAlert,
+  BarChart3,
+  Camera,
+  Cpu,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 
-type ViewType = 'dashboard' | 'events' | 'anomalies' | 'analytics' | 'cameras' | 'system';
+type ViewType =
+  | 'dashboard'
+  | 'events'
+  | 'anomalies'
+  | 'analytics'
+  | 'cameras'
+  | 'system';
 
-const MainAppContent: React.FC = () => {
+const menuItems = [
+  { id: 'dashboard' as const, label: 'Live Operations', icon: LayoutDashboard },
+  { id: 'events' as const, label: 'Event Explorer', icon: Database },
+  { id: 'anomalies' as const, label: 'Anomaly Center', icon: ShieldAlert },
+  { id: 'analytics' as const, label: 'Analytics Insights', icon: BarChart3 },
+  { id: 'cameras' as const, label: 'Camera Registry', icon: Camera },
+  { id: 'system' as const, label: 'System Observability', icon: Cpu },
+];
+
+const MainApp: React.FC = () => {
   const [activeView, setActiveView] = useState<ViewType>('dashboard');
-  const [selectedStoreId, setSelectedStoreId] = useState<string | null>(null);
-  const [selectedIncidentId, setSelectedIncidentId] = useState<string | null>(null);
-  
-  // Sidebar expand state
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
 
-  // Navigate directly to incident detail profile (routing handler)
-  const handleNavigateToIncident = (incidentId: string) => {
-    setSelectedIncidentId(incidentId);
-  };
-
-  // Sidebar link items
-  const menuItems = [
-    { id: 'dashboard', label: 'Live Operations', icon: LayoutDashboard },
-    { id: 'events', label: 'Event Explorer', icon: Database },
-    { id: 'anomalies', label: 'Anomaly Center', icon: ShieldAlert },
-    { id: 'analytics', label: 'Analytics Insights', icon: BarChart3 },
-    { id: 'cameras', label: 'Cameras Registry', icon: Camera },
-    { id: 'system', label: 'System Observability', icon: Cpu },
-  ] as const;
-
-  // Render view depending on navigation state
-  const renderActiveView = () => {
-    // If routing direct to incident detail profile
-    if (selectedIncidentId) {
-      return (
-        <IncidentDetail
-          incidentId={selectedIncidentId}
-          onBack={() => setSelectedIncidentId(null)}
-        />
-      );
-    }
-
+  const renderView = () => {
     switch (activeView) {
       case 'events':
-        return <EventExplorer selectedStoreId={selectedStoreId} />;
+        return <EventExplorer />;
       case 'anomalies':
-        return (
-          <AnomalyCenter
-            selectedStoreId={selectedStoreId}
-            onNavigateToIncident={handleNavigateToIncident}
-          />
-        );
+        return <AnomalyCenter />;
       case 'analytics':
-        return <Analytics selectedStoreId={selectedStoreId} />;
+        return <Analytics />;
       case 'cameras':
-        return <CamerasAdmin selectedStoreId={selectedStoreId} />;
+        return <CamerasAdmin />;
       case 'system':
         return <SystemHealth />;
-      case 'dashboard':
       default:
-        return (
-          <LiveOps
-            selectedStoreId={selectedStoreId}
-            onNavigateToIncident={handleNavigateToIncident}
-          />
-        );
+        return <LiveOps />;
     }
   };
 
-  const getPageTitle = () => {
-    if (selectedIncidentId) return `Security Incident Details`;
-    const found = menuItems.find(m => m.id === activeView);
-    return found ? found.label : 'Operations Console';
-  };
+  const title = menuItems.find((m) => m.id === activeView)?.label ?? 'Dashboard';
 
   return (
-    <div className="app-container">
-      
-      {/* 1. Collapsible Sidebar */}
-      <aside className={`sidebar ${isSidebarCollapsed ? 'collapsed' : ''}`}>
-        
-        {/* Brand/Logo header */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: isSidebarCollapsed ? 'center' : 'space-between', marginBottom: '32px' }}>
-          {!isSidebarCollapsed && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <div style={{ backgroundColor: 'var(--color-cyan)15', border: '1px solid var(--color-cyan)3a', color: 'var(--color-cyan)', borderRadius: '8px', padding: '6px', display: 'flex', alignItems: 'center' }}>
-                <ShieldAlert size={18} />
-              </div>
-              <span style={{ fontWeight: 800, fontSize: '1.1rem', letterSpacing: '-0.02em', color: '#fff' }}>
-                INTELLI AI
-              </span>
+    <div className="flex min-h-screen bg-[#0f111a] text-slate-100">
+      <aside
+        className={`flex flex-col border-r border-white/10 bg-[#161925] p-4 transition-all ${
+          collapsed ? 'w-[72px]' : 'w-[240px]'
+        }`}
+      >
+        <div className="mb-8 flex items-center justify-between">
+          {!collapsed && (
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-widest text-cyan-400">
+                Store Intel
+              </p>
+              <h2 className="text-lg font-bold text-white">AI CCTV MVP</h2>
             </div>
           )}
-
           <button
-            onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-            style={{
-              background: 'none',
-              border: 'none',
-              color: 'var(--text-secondary)',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              padding: '4px'
-            }}
+            type="button"
+            onClick={() => setCollapsed(!collapsed)}
+            className="rounded p-1 text-slate-400 hover:text-white"
           >
-            {isSidebarCollapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
+            {collapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
           </button>
         </div>
 
-        {/* Sidebar Nav links */}
-        <nav style={{ display: 'flex', flexDirection: 'column', gap: '6px', flex: 1 }}>
+        <nav className="flex flex-1 flex-col gap-1">
           {menuItems.map((item) => {
-            const isLinkActive = activeView === item.id && !selectedIncidentId;
             const Icon = item.icon;
-
+            const active = activeView === item.id;
             return (
               <button
                 key={item.id}
-                onClick={() => {
-                  setActiveView(item.id);
-                  setSelectedIncidentId(null); // clear detail state when changing views
-                }}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '12px',
-                  width: '100%',
-                  padding: '12px 16px',
-                  borderRadius: '8px',
-                  border: 'none',
-                  cursor: 'pointer',
-                  fontSize: '0.85rem',
-                  fontWeight: isLinkActive ? 600 : 500,
-                  transition: 'all var(--transition-fast)',
-                  backgroundColor: isLinkActive ? 'rgba(0, 229, 255, 0.08)' : 'transparent',
-                  color: isLinkActive ? 'var(--color-cyan)' : 'var(--text-secondary)',
-                  justifyContent: isSidebarCollapsed ? 'center' : 'flex-start'
-                }}
+                type="button"
+                onClick={() => setActiveView(item.id)}
+                className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition ${
+                  active
+                    ? 'bg-cyan-500/10 text-cyan-400'
+                    : 'text-slate-400 hover:bg-white/5 hover:text-white'
+                }`}
               >
                 <Icon size={18} />
-                {!isSidebarCollapsed && <span>{item.label}</span>}
+                {!collapsed && <span>{item.label}</span>}
               </button>
             );
           })}
         </nav>
-
-        {/* Bottom Operator profile block */}
-        <div
-          style={{
-            borderTop: '1px solid var(--border-glass)',
-            paddingTop: '16px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '10px',
-            justifyContent: isSidebarCollapsed ? 'center' : 'flex-start'
-          }}
-        >
-          <div style={{ backgroundColor: 'var(--bg-tertiary)', borderRadius: '50%', padding: '8px', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center' }}>
-            <User size={16} />
-          </div>
-          {!isSidebarCollapsed && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-              <span style={{ fontSize: '0.8rem', fontWeight: 600 }}>Operator Alex</span>
-              <span style={{ fontSize: '0.65rem', color: 'var(--text-secondary)' }}>ops-monitor-level-2</span>
-            </div>
-          )}
-        </div>
-
       </aside>
 
-      {/* 2. Main content area wrapper */}
-      <main className="main-content">
-        
-        {/* Top Header bar */}
-        <header
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            marginBottom: '28px',
-            flexWrap: 'wrap',
-            gap: '16px',
-            borderBottom: '1px solid var(--border-glass)',
-            paddingBottom: '20px'
-          }}
-        >
+      <main className="flex flex-1 flex-col p-6">
+        <header className="mb-6 flex flex-wrap items-center justify-between gap-4 border-b border-white/10 pb-4">
           <div>
-            <h1 style={{ fontSize: '1.4rem', fontWeight: 800, letterSpacing: '-0.02em' }}>
-              {getPageTitle()}
-            </h1>
-            <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-              Store Intelligence Ops Console • Live Ingestion Pipeline
-            </span>
+            <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
+            <p className="text-sm text-slate-400">
+              Real-time store intelligence • YOLOv8 + Socket.IO
+            </p>
           </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
-            {/* Store fleet selector dropdown */}
-            {!selectedIncidentId && (
-              <StoreSelector
-                selectedStoreId={selectedStoreId}
-                onSelectStore={setSelectedStoreId}
-              />
-            )}
-
-            {/* Ingestion Stream Health status pill */}
-            <ConnectionStatus />
-          </div>
+          <ConnectionStatus />
         </header>
-
-        {/* 3. Page viewport mounted with Error boundary protection */}
-        <ErrorBoundary>
-          {renderActiveView()}
-        </ErrorBoundary>
-
+        <ErrorBoundary>{renderView()}</ErrorBoundary>
       </main>
-
     </div>
   );
 };
 
-export const App: React.FC = () => {
-  return (
-    <StreamProvider>
-      <MainAppContent />
-    </StreamProvider>
-  );
-};
+export const App: React.FC = () => (
+  <StreamProvider>
+    <MainApp />
+  </StreamProvider>
+);
+
 export default App;

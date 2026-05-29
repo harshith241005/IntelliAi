@@ -1,225 +1,135 @@
-import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
-import { CCTVEvent, Store, Camera, Incident } from '../types/schema';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { io, Socket } from 'socket.io-client';
+import type { Alert, Camera, DashboardStats, StoreEvent } from '../types/schema';
 
 interface StreamContextType {
-  events: CCTVEvent[];
-  alerts: CCTVEvent[];
+  events: StoreEvent[];
+  alerts: Alert[];
+  cameras: Camera[];
+  dashboard: DashboardStats | null;
   connectionStatus: 'connected' | 'connecting' | 'disconnected';
-  isStale: boolean;
-  acknowledgeAlert: (eventId: string) => void;
-  triggerMockBreach: (cameraId: string) => Promise<boolean>;
-  activeStores: Store[];
-  activeCameras: Camera[];
-  fetchIncidentList: () => Promise<Incident[]>;
-  updateIncidentTriage: (incidentId: string, status: string, assignedTo: string, note?: string) => Promise<boolean>;
-  refreshMetadata: () => void;
+  silenceAlert: (alertId: string) => Promise<void>;
+  investigateAlert: (alertId: string) => Promise<void>;
+  refreshCameras: () => Promise<void>;
 }
 
 const StreamContext = createContext<StreamContextType | undefined>(undefined);
 
+const API = '/api';
+
 export const useStream = () => {
-  const context = useContext(StreamContext);
-  if (!context) throw new Error("useStream must be used within a StreamProvider");
-  return context;
+  const ctx = useContext(StreamContext);
+  if (!ctx) throw new Error('useStream must be used within StreamProvider');
+  return ctx;
 };
 
 export const StreamProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [events, setEvents] = useState<CCTVEvent[]>([]);
-  const [alerts, setAlerts] = useState<CCTVEvent[]>([]);
-  const [connectionStatus, setConnectionStatus] = useState<StreamContextType['connectionStatus']>('connecting');
-  const [isStale, setIsStale] = useState(false);
-  const [activeStores, setActiveStores] = useState<Store[]>([]);
-  const [activeCameras, setActiveCameras] = useState<Camera[]>([]);
+  const [events, setEvents] = useState<StoreEvent[]>([]);
+  const [alerts, setAlerts] = useState<Alert[]>([]);
+  const [cameras, setCameras] = useState<Camera[]>([]);
+  const [dashboard, setDashboard] = useState<DashboardStats | null>(null);
+  const [connectionStatus, setConnectionStatus] =
+    useState<StreamContextType['connectionStatus']>('connecting');
 
-  const wsRef = useRef<WebSocket | null>(null);
-  const lastEventTimeRef = useRef<number>(Date.now());
-  const reconnectTimeoutRef = useRef<number | null>(null);
-  const reconnectAttemptsRef = useRef<number>(0);
-
-  // Load stores and cameras from backend REST APIs
-  const fetchMetadata = useCallback(async () => {
+  const refreshCameras = useCallback(async () => {
     try {
-      const storesRes = await fetch('/api/v1/stores');
-      const camerasRes = await fetch('/api/v1/cameras');
-      if (storesRes.ok && camerasRes.ok) {
-        const stores = await storesRes.json();
-        const cameras = await camerasRes.json();
-        setActiveStores(stores);
-        setActiveCameras(cameras);
-      }
-    } catch (e) {
-      console.warn("Failed to fetch operational stores/cameras metadata:", e);
+      const res = await fetch(`${API}/cameras`);
+      if (res.ok) setCameras(await res.json());
+    } catch {
+      /* backend may be starting */
     }
   }, []);
 
-  // Fetch incidents list
-  const fetchIncidentList = useCallback(async (): Promise<Incident[]> => {
+  const loadInitial = useCallback(async () => {
+    await refreshCameras();
     try {
-      const res = await fetch('/api/v1/incidents');
-      if (res.ok) {
-        return await res.json();
-      }
-    } catch (e) {
-      console.error("Failed to fetch incidents list:", e);
+      const [evRes, alRes, dashRes] = await Promise.all([
+        fetch(`${API}/events?limit=200`),
+        fetch(`${API}/alerts?status=active`),
+        fetch(`${API}/dashboard/stats`),
+      ]);
+      if (evRes.ok) setEvents(await evRes.json());
+      if (alRes.ok) setAlerts(await alRes.json());
+      if (dashRes.ok) setDashboard(await dashRes.json());
+    } catch {
+      /* ignore */
     }
-    return [];
+  }, [refreshCameras]);
+
+  const silenceAlert = useCallback(async (alertId: string) => {
+    await fetch(`${API}/alerts/${alertId}/silence`, { method: 'POST' });
+    setAlerts((prev) => prev.filter((a) => a.alert_id !== alertId));
   }, []);
 
-  // Triaging incidents
-  const updateIncidentTriage = useCallback(async (
-    incidentId: string,
-    status: string,
-    assignedTo: string,
-    note?: string
-  ): Promise<boolean> => {
-    try {
-      const res = await fetch(`/api/v1/incidents/${incidentId}?status=${status}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status, note })
-      });
-      if (res.ok) {
-        // Refresh stores/cameras status in-app immediately after triage update
-        fetchMetadata();
-        return true;
-      }
-    } catch (e) {
-      console.error("Failed to update incident triage:", e);
-    }
-    return false;
-  }, [fetchMetadata]);
-
-  // Manually trigger dynamic security breach for camera pipeline testing
-  const triggerMockBreach = useCallback(async (cameraId: string): Promise<boolean> => {
-    try {
-      const res = await fetch(`/api/v1/cameras/${cameraId}/trigger-breach`, {
-        method: 'POST'
-      });
-      return res.ok;
-    } catch (e) {
-      console.error("Failed to trigger security breach simulation:", e);
-      return false;
-    }
+  const investigateAlert = useCallback(async (alertId: string) => {
+    await fetch(`${API}/alerts/${alertId}/investigate`, { method: 'POST' });
+    setAlerts((prev) => prev.filter((a) => a.alert_id !== alertId));
   }, []);
 
-  // Connect WebSocket to backend server
-  const connectWebSocket = useCallback(() => {
-    if (wsRef.current) {
-      wsRef.current.close();
-    }
-
-    setConnectionStatus('connecting');
-    console.log("Connecting WebSocket to ws://localhost:8000/api/v1/events/stream...");
-    
-    const ws = new WebSocket('ws://localhost:8000/api/v1/events/stream');
-    wsRef.current = ws;
-
-    ws.onopen = () => {
-      console.log("WebSocket stream connected successfully.");
-      setConnectionStatus('connected');
-      setIsStale(false);
-      reconnectAttemptsRef.current = 0;
-      lastEventTimeRef.current = Date.now();
-      
-      // Load/refresh current REST data on connect
-      fetchMetadata();
-    };
-
-    ws.onmessage = (messageEvent) => {
-      try {
-        const event: CCTVEvent = JSON.parse(messageEvent.data);
-        lastEventTimeRef.current = Date.now();
-        setIsStale(false);
-
-        // 1. Buffer rolling live events (capped at 500 records to prevent browser memory leaks)
-        setEvents((prev) => {
-          const next = [event, ...prev];
-          if (next.length > 500) {
-            next.pop();
-          }
-          return next;
-        });
-
-        // 2. Buffer alerts if anomaly detected with severity high/critical
-        if (event.event_type === 'anomaly' && event.severity === 'critical') {
-          setAlerts((prev) => {
-            // Avoid duplicate notifications in alert banner rail
-            if (prev.some(a => a.event_id === event.event_id || a.track_id === event.track_id)) {
-              return prev;
-            }
-            return [event, ...prev];
-          });
-        }
-      } catch (err) {
-        console.error("Error parsing streaming WebSocket JSON frame:", err);
-      }
-    };
-
-    ws.onclose = () => {
-      console.warn("WebSocket stream connection severed.");
-      setConnectionStatus('disconnected');
-      
-      // Exponential backoff reconnect
-      const delay = Math.min(1000 * Math.pow(2, reconnectAttemptsRef.current), 30000);
-      reconnectAttemptsRef.current++;
-      
-      console.log(`Scheduling reconnect attempt in ${delay}ms...`);
-      reconnectTimeoutRef.current = window.setTimeout(() => {
-        connectWebSocket();
-      }, delay);
-    };
-
-    ws.onerror = (err) => {
-      console.error("WebSocket client connection error:", err);
-    };
-  }, [fetchMetadata]);
-
-  // Acknowledge critical alerts
-  const acknowledgeAlert = useCallback((eventId: string) => {
-    setAlerts((prev) => prev.filter(a => a.event_id !== eventId));
-  }, []);
-
-  // Periodic metadata poll + stale-data health checks
   useEffect(() => {
-    connectWebSocket();
+    loadInitial();
 
-    // Check if data is stale: no messages received in past 5 seconds
-    const staleInterval = setInterval(() => {
-      const timeSinceLastMsg = Date.now() - lastEventTimeRef.current;
-      if (timeSinceLastMsg > 5000 && connectionStatus === 'connected') {
-        setIsStale(true);
-      }
-    }, 1000);
+    const socket: Socket = io({
+      transports: ['websocket', 'polling'],
+      reconnection: true,
+    });
 
-    // Poll stores and cameras statistics once every 10 seconds to sync REST database values
-    const metadataInterval = setInterval(() => {
-      if (connectionStatus === 'connected') {
-        fetchMetadata();
+    socket.on('connect', () => {
+      setConnectionStatus('connected');
+      loadInitial();
+    });
+
+    socket.on('disconnect', () => setConnectionStatus('disconnected'));
+
+    socket.on('connect_error', () => setConnectionStatus('connecting'));
+
+    socket.on('event', (event: StoreEvent) => {
+      setEvents((prev) => [event, ...prev].slice(0, 500));
+      if (event.severity === 'critical' || event.severity === 'high') {
+        setAlerts((prev) => {
+          const synthetic: Alert = {
+            alert_id: `live_${event.event_id}`,
+            type: event.event_type,
+            status: 'active',
+            camera_id: event.camera_id,
+            severity: event.severity as Alert['severity'],
+            message: event.message || event.event_type,
+            created_at: event.timestamp,
+            event_id: event.event_id,
+          };
+          if (prev.some((a) => a.event_id === event.event_id)) return prev;
+          return [synthetic, ...prev].slice(0, 20);
+        });
       }
-    }, 10000);
+    });
+
+    socket.on('alert', (alert: Alert) => {
+      setAlerts((prev) => {
+        if (prev.some((a) => a.alert_id === alert.alert_id)) return prev;
+        return [alert, ...prev].slice(0, 20);
+      });
+    });
+
+    socket.on('dashboard', (stats: DashboardStats) => setDashboard(stats));
 
     return () => {
-      if (wsRef.current) wsRef.current.close();
-      if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
-      clearInterval(staleInterval);
-      clearInterval(metadataInterval);
+      socket.disconnect();
     };
-  }, [connectWebSocket, connectionStatus, fetchMetadata]);
+  }, [loadInitial]);
 
   return (
-    <StreamContext.Provider value={{
-      events,
-      alerts,
-      connectionStatus,
-      isStale,
-      acknowledgeAlert,
-      triggerMockBreach,
-      activeStores,
-      activeCameras,
-      fetchIncidentList,
-      updateIncidentTriage,
-      refreshMetadata: fetchMetadata
-    }}>
+    <StreamContext.Provider
+      value={{
+        events,
+        alerts,
+        cameras,
+        dashboard,
+        connectionStatus,
+        silenceAlert,
+        investigateAlert,
+        refreshCameras,
+      }}
+    >
       {children}
     </StreamContext.Provider>
   );

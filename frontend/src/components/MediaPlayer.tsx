@@ -34,7 +34,8 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
     return () => clearInterval(interval);
   }, [isPlaying]);
 
-  const posterUrl = STREAM_POSTERS[cameraId] || STREAM_POSTERS.cam_104_01;
+  const index = Math.abs(cameraId.split("").reduce((a, b) => a + b.charCodeAt(0), 0)) % Object.values(STREAM_POSTERS).length;
+  const posterUrl = Object.values(STREAM_POSTERS)[index];
 
   return (
     <div
@@ -50,9 +51,8 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
       }}
     >
       {/* 1. CCTV Video Frame Image */}
-      <img
-        src={posterUrl}
-        alt={cameraName}
+      <video autoPlay loop muted playsInline
+        src="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerMeltdowns.mp4"
         style={{
           position: 'absolute',
           top: 0,

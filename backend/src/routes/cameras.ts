@@ -1,71 +1,46 @@
-import { Router, Request, Response } from 'express';
-import { db } from '../database';
-import { pipeline } from '../pipeline/IngestionPipeline';
+import { Router } from 'express';
+import { CameraModel } from '../db.js';
+import { runtimeMetrics } from '../metrics.js';
 
-const router = Router();
+export const camerasRouter = Router();
 
-// Get camera list
-router.get('/', (req: Request, res: Response) => {
-  try {
-    res.json(db.getCameras());
-  } catch (error: any) {
-    db.addLog('error', 'GET /api/cameras', 500, error.message);
-    res.status(500).json({ error: "Internal Server Error" });
-  }
+camerasRouter.get('/', async (_req, res) => {
+  const cameras = await CameraModel.find().sort({ camera_id: 1 }).lean();
+  res.json(cameras);
 });
 
-// Modify camera status / controls (e.g. simulate frame rates or shut off)
-router.post('/:id/control', (req: Request, res: Response) => {
-  try {
-    const { id } = req.params;
-    const { status, fps } = req.body;
-    
-    const cameras = db.getCameras();
-    const camera = cameras.find(c => c.camera_id === id);
-    
-    if (!camera) {
-      return res.status(404).json({ error: "Camera not found" });
-    }
-
-    const updatedStatus = status || camera.status;
-    const updatedFps = fps !== undefined ? Number(fps) : camera.fps;
-    
-    db.updateCameraStatus(
-      id,
-      updatedStatus,
-      updatedFps,
-      updatedStatus === 'online' ? 0.2 : 5.0,
-      updatedStatus === 'online' ? 45 : 180
-    );
-
-    db.addLog('info', `POST /api/cameras/${id}/control`, 200, `Camera state updated: status=${updatedStatus}, fps=${updatedFps}`);
-    
-    res.json({ success: true, camera: cameras.find(c => c.camera_id === id) });
-  } catch (error: any) {
-    db.addLog('error', `POST /api/cameras/${req.params.id}/control`, 500, error.message);
-    res.status(500).json({ error: "Internal Server Error" });
+camerasRouter.post('/', async (req, res) => {
+  const { camera_id, name, status = 'active', source } = req.body;
+  if (!camera_id || !name) {
+    res.status(400).json({ error: 'camera_id and name are required' });
+    return;
   }
+  const camera = await CameraModel.findOneAndUpdate(
+    { camera_id },
+    { camera_id, name, status, source },
+    { upsert: true, new: true }
+  );
+  res.status(201).json(camera);
 });
 
-// Force security breach trigger on camera
-router.post('/:id/trigger-breach', (req: Request, res: Response) => {
-  try {
-    const { id } = req.params;
-    const cameras = db.getCameras();
-    const camera = cameras.find(c => c.camera_id === id);
-
-    if (!camera) {
-      return res.status(404).json({ error: "Camera not found" });
-    }
-
-    pipeline.forceSecurityBreach(camera.store_id, id);
-    db.addLog('warning', `POST /api/cameras/${id}/trigger-breach`, 200, `Forced security intrusion triggered manually on ${id}`);
-
-    res.json({ success: true, message: "Critical Intrusion Event dispatched to stream." });
-  } catch (error: any) {
-    db.addLog('error', `POST /api/cameras/${req.params.id}/trigger-breach`, 500, error.message);
-    res.status(500).json({ error: "Internal Server Error" });
+camerasRouter.patch('/:cameraId', async (req, res) => {
+  const camera = await CameraModel.findOneAndUpdate(
+    { camera_id: req.params.cameraId },
+    req.body,
+    { new: true }
+  );
+  if (!camera) {
+    res.status(404).json({ error: 'Camera not found' });
+    return;
   }
+  res.json(camera);
 });
 
-export default router;
+camerasRouter.post('/:cameraId/heartbeat', async (req, res) => {
+  runtimeMetrics.active_streams += 1;
+  await CameraModel.updateOne(
+    { camera_id: req.params.cameraId },
+    { status: 'active' }
+  );
+  res.json({ ok: true });
+});

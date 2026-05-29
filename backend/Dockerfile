@@ -1,34 +1,18 @@
-# Multi-stage Build Dockerfile for Store Intelligence API
-FROM python:3.11-slim as builder
-
+FROM node:20-alpine AS builder
 WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci
+COPY tsconfig.json ./
+COPY src ./src
+RUN npm run build
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    libpq-dev \
-    && rm -rf /var/lib/apt/lists/*
-
-COPY requirements.txt .
-RUN pip install --no-cache-dir --user -r requirements.txt
-
-# Final stage
-FROM python:3.11-slim as runner
-
+FROM node:20-alpine
 WORKDIR /app
-
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    libpq5 \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
-
-# Copy installed packages from builder
-COPY --from=builder /root/.local /root/.local
-COPY . .
-
-ENV PATH=/root/.local/bin:$PATH
-ENV PYTHONUNBUFFERED=1
-
-EXPOSE 8000
-
-# Run API startup with database migrations and seed triggers
-CMD ["sh", "-c", "python -m alembic upgrade head || true && python -m app.main"]
+ENV NODE_ENV=production
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev
+COPY --from=builder /app/dist ./dist
+EXPOSE 5000
+HEALTHCHECK --interval=15s --timeout=5s --retries=3 \
+  CMD node -e "fetch('http://127.0.0.1:5000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+CMD ["node", "dist/server.js"]
