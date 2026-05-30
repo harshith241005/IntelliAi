@@ -2,12 +2,12 @@
 echo Starting Store Intelligence Platform...
 
 echo Starting FastAPI Backend...
-start cmd /k "cd store-intelligence && .\venv\Scripts\activate && python run_backend.py"
+start cmd /k "cd backend && .\venv\Scripts\activate && python run_backend.py"
 
 echo Starting React Dashboard...
 start cmd /k "cd frontend && npm run dev"
 
 echo Starting AI Detection Pipeline (Webcam)...
-start cmd /k "cd store-intelligence && .\venv\Scripts\activate && python runner.py --source 0"
+start cmd /k "cd backend && .\venv\Scripts\activate && python runner.py --source 0"
 
 echo All services launched in separate windows!

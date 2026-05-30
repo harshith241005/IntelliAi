@@ -1,13 +1,13 @@
 services:
   backend:
-    build: ./store-intelligence
+    build: ./backend
     restart: unless-stopped
     ports:
       - "8000:8000"
     environment:
       PORT: 8000
     volumes:
-      - ./store-intelligence:/app
+      - ./backend:/app
     command: python run_backend.py
     healthcheck:
       test: ["CMD", "curl", "-f", "http://127.0.0.1:8000/cameras"]
@@ -25,13 +25,13 @@ services:
       - backend
 
   pipeline:
-    build: ./store-intelligence
+    build: ./backend
     profiles: ["ai"]
     restart: unless-stopped
     environment:
       API_ENDPOINT: http://backend:8000/events/ingest
     volumes:
-      - ./store-intelligence:/app
+      - ./backend:/app
     # Note: Requires a volume mounted video file or access to webcam device which Docker struggles with on Mac/Windows natively without special flags.
     command: python runner.py --source 0 --api http://backend:8000/events/ingest
       VIDEO_SOURCE: "0"
