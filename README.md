@@ -1,34 +1,92 @@
 # AI Store Intelligence System (MVP)
 
-Real-time CCTV analytics: **YOLOv8 person detection** → **tracking** → **events** → **Node.js API** → **MongoDB** → **Socket.IO** → **React dashboard**.
+**Dual-Purpose Intelligence Platform** combining real-time CCTV analytics with comprehensive retail business intelligence.
+
+## 🎯 Two Integrated Systems
+
+### 1. **Real-Time Security & Operations (CCTV)**
+YOLOv8 person detection → tracking → events → Node.js API → MongoDB → Socket.IO → React dashboard
+
+### 2. **Retail Analytics & Business Intelligence (CSV Data)**
+✨ **NOW WITH REAL BRIGADE BANGALORE STORE DATA!**
+
+Real transaction data ingestion → Product analytics → Staff performance → Customer insights → MongoDB → REST API
+
+---
+
+## 📊 Real Data Integration
+
+**Active Dataset:** Brigade Bangalore Store (April 10, 2026)
+- 101 real retail transactions
+- 47 unique products (Cosmetics, Skincare, Makeup)
+- 90+ customers
+- 15 sales staff members
+- ₹55,000+ in verified sales data
+
+### Available Analytics APIs
+- `/api/orders` - Transaction listing & filtering
+- `/api/orders/analytics/summary` - Sales totals, KPIs
+- `/api/orders/analytics/by-date` - Daily trends
+- `/api/orders/analytics/by-product` - Product performance
+- `/api/orders/analytics/by-staff` - Sales team metrics
+- `/api/stores/:storeId/analytics` - Store comprehensive analytics
+- `/api/products` - Product catalog with sales data
+
+📖 See [REAL_DATA_INTEGRATION.md](REAL_DATA_INTEGRATION.md) for complete documentation.
+
+---
 
 ## Architecture
 
 ```
-CCTV / Webcam / Video
-        ↓
-AI Service (Python + OpenCV + YOLOv8)
-        ↓
-POST /api/events
-        ↓
-Backend (Node.js + Express)
-        ↓
-MongoDB (events, cameras, alerts)
-        ↓
-Socket.IO
-        ↓
-React Dashboard (Tailwind)
+┌─────────────────────────────────────────────────────────┐
+│  DUAL INPUT SYSTEM                                      │
+│  ├─ CCTV/Webcam (Real-time security)                   │
+│  └─ CSV Data (Batch retail analytics)                  │
+└──────────────────────┬──────────────────────────────────┘
+                       ↓
+        ┌──────────────────────────────┐
+        │  Node.js Backend + Express   │
+        │  Socket.IO for live updates  │
+        └──────────────────┬───────────┘
+                           ↓
+        ┌──────────────────────────────┐
+        │  MongoDB (Multi-collection)  │
+        │  ├─ events (CCTV)           │
+        │  ├─ orders (transactions)   │
+        │  ├─ products (catalog)      │
+        │  ├─ customers               │
+        │  ├─ staff                   │
+        │  └─ stores                  │
+        └──────────────────┬───────────┘
+                           ↓
+        ┌──────────────────────────────┐
+        │  React Dashboard (Tailwind)  │
+        │  ├─ Live CCTV operations    │
+        │  └─ Analytics & Reports     │
+        └──────────────────────────────┘
 ```
 
 ## MVP features
 
+**Security & Operations:**
 - Person detection (YOLOv8, class `person` only)
 - Tracking with persistent IDs (YOLO built-in tracker)
 - Live occupancy + entry events
 - Event types: `person_detected`, `person_entered`, `crowd_detected`, `zone_breach`, `high_occupancy`, `occupancy_update`
 - Alert engine (crowd > 20, restricted polygon zone)
 - Real-time dashboard with Socket.IO
-- MongoDB collections: `events`, `cameras`, `alerts`
+
+**Business Intelligence:**
+- Real Brigade Bangalore store data (CSV)
+- Sales analytics & trends
+- Product performance metrics
+- Staff performance tracking
+- Customer purchase analysis
+- Inventory/stock insights
+- Tax & financial reporting
+
+MongoDB collections: `events`, `cameras`, `alerts`, `orders`, `products`, `customers`, `staff`, `stores`
 
 ## Quick start
 
@@ -89,6 +147,8 @@ Environment variables:
 start_platform.bat
 ```
 
+**Data Note:** System now loads real Brigade Bangalore store data from CSV on startup.
+
 ## Dashboard modules
 
 | Module | Description |
@@ -116,15 +176,29 @@ start_platform.bat
 
 ## API overview
 
+### Security & Events (CCTV)
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/api/health` | Health check |
-| GET/POST | `/api/events` | List / ingest events |
+| GET/POST | `/api/events` | List / ingest CCTV events |
 | GET | `/api/cameras` | List cameras |
 | GET/PATCH | `/api/alerts` | Alerts CRUD |
 | GET | `/api/dashboard/stats` | Live KPIs |
 | GET | `/api/dashboard/heatmap` | Zone density |
 | GET | `/api/dashboard/metrics` | System metrics |
+
+### Business Intelligence (Retail Data)
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/orders` | List transactions (paginated) |
+| GET | `/api/orders/analytics/summary` | Sales KPI totals |
+| GET | `/api/orders/analytics/by-date` | Daily sales trends |
+| GET | `/api/orders/analytics/by-product` | Top products & performance |
+| GET | `/api/orders/analytics/by-staff` | Salesperson metrics |
+| GET | `/api/stores` | Store list & details |
+| GET | `/api/stores/:storeId/analytics` | Comprehensive store analytics |
+| GET | `/api/products` | Product catalog |
+| GET | `/api/products/departments` | Departments list |
 
 **Real-time:** Socket.IO events `event`, `alert`, `dashboard`.
 
@@ -139,7 +213,7 @@ start_platform.bat
 
 ## Docker
 
-Full stack (MongoDB + API + dashboard with mock events):
+Full stack (MongoDB + API + dashboard with **real Brigade Bangalore store data**):
 
 ```bash
 docker compose up --build
@@ -147,6 +221,7 @@ docker compose up --build
 
 - Dashboard: http://localhost:3000  
 - API: http://localhost:5000/api/health  
+- Real data auto-loaded from CSV on startup
 
 Optional AI service (requires webcam device mapping on Linux):
 
@@ -154,7 +229,7 @@ Optional AI service (requires webcam device mapping on Linux):
 docker compose --profile ai up --build
 ```
 
-Environment: set `MOCK_EVENTS=false` in `docker-compose.yml` or `.env` when using real AI ingest.
+**Note:** CCTV events and real retail data work together for complete store intelligence.
 
 ## Project layout
 

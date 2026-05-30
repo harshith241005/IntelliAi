@@ -1,32 +1,16 @@
 services:
-  mongodb:
-    image: mongo:7
-    restart: unless-stopped
-    ports:
-      - "27017:27017"
-    volumes:
-      - mongo_data:/data/db
-    healthcheck:
-      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 20s
-
   backend:
-    build: ./backend
+    build: ./store-intelligence
     restart: unless-stopped
     ports:
-      - "5000:5000"
+      - "8000:8000"
     environment:
-      MONGO_URI: mongodb://mongodb:27017/store_intelligence
-      PORT: 5000
-      MOCK_EVENTS: ${MOCK_EVENTS:-true}
-    depends_on:
-      mongodb:
-        condition: service_healthy
+      PORT: 8000
+    volumes:
+      - ./store-intelligence:/app
+    command: python run_backend.py
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:5000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8000/cameras"]
       interval: 15s
       timeout: 5s
       retries: 5
@@ -38,16 +22,18 @@ services:
     ports:
       - "3000:80"
     depends_on:
-      backend:
-        condition: service_healthy
+      - backend
 
-  ai-service:
-    build: ./ai-service
+  pipeline:
+    build: ./store-intelligence
     profiles: ["ai"]
     restart: unless-stopped
     environment:
-      API_URL: http://backend:5000/api/events
-      CAMERA_ID: CAM_01
+      API_ENDPOINT: http://backend:8000/events/ingest
+    volumes:
+      - ./store-intelligence:/app
+    # Note: Requires a volume mounted video file or access to webcam device which Docker struggles with on Mac/Windows natively without special flags.
+    command: python runner.py --source 0 --api http://backend:8000/events/ingest
       VIDEO_SOURCE: "0"
       CROWD_THRESHOLD: "20"
     depends_on:

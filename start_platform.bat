@@ -13,7 +13,7 @@ cd backend
 if not exist node_modules (
   call npm install
 )
-start cmd /k "title StoreIntel-Backend && set MOCK_EVENTS=true && npm run dev"
+start cmd /k "title StoreIntel-Backend && npm run dev"
 cd ..
 
 timeout /t 3 /nobreak >nul
