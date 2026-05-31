@@ -3,14 +3,15 @@ services:
     build: ./backend
     restart: unless-stopped
     ports:
-      - "8000:8000"
+      - "5000:5000"
     environment:
-      PORT: 8000
+      PORT: 5000
     volumes:
       - ./backend:/app
+      - ./resources:/app/resources
     command: python run_backend.py
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://127.0.0.1:8000/cameras"]
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:5000/cameras"]
       interval: 15s
       timeout: 5s
       retries: 5
@@ -29,18 +30,17 @@ services:
     profiles: ["ai"]
     restart: unless-stopped
     environment:
-      API_ENDPOINT: http://backend:8000/events/ingest
-    volumes:
-      - ./backend:/app
-    # Note: Requires a volume mounted video file or access to webcam device which Docker struggles with on Mac/Windows natively without special flags.
-    command: python runner.py --source 0 --api http://backend:8000/events/ingest
+      API_ENDPOINT: http://backend:5000/api/events/ingest
       VIDEO_SOURCE: "0"
       CROWD_THRESHOLD: "20"
+    volumes:
+      - ./backend:/app
+      - ./resources:/app/resources
+    # Headless execution configuration
+    command: python runner.py --source "/app/resources/CAM 1.mp4" --api http://backend:5000/api/events/ingest --display false
     depends_on:
       backend:
         condition: service_healthy
-    # Webcam inside Docker needs device mapping on Linux:
-    # devices: ["/dev/video0:/dev/video0"]
 
 volumes:
   mongo_data:
