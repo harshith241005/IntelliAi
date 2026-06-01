@@ -368,12 +368,17 @@ async def investigate_alert(alert_id: str, db: DBManager = Depends(get_db)):
 @app.get("/dashboard/metrics")
 @app.get("/api/dashboard/metrics")
 async def get_dashboard_metrics(db: DBManager = Depends(get_db)):
+    async with AsyncSessionLocal() as session:
+        res = await session.execute(select(func.count(DBEvent.id)))
+        events_count = res.scalar() or 0
+        
     return {
-        "status": "healthy",
-        "cpu_usage": 32.8,
-        "memory_usage": 845,
-        "active_sockets": 3,
-        "uptime": 7200
+        "fps": 15.0,
+        "ai_processing_ms": 22.4,
+        "queue_size": 0,
+        "api_latency_ms": 38.4,
+        "active_streams": 5,
+        "events_ingested_total": events_count
     }
 
 @app.get("/dashboard/stats")
