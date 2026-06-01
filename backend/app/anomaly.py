@@ -82,7 +82,7 @@ class AnomalyDetector:
                 if active_billing > self.rules["checkout_queue_length"]:
                     await self._flag_anomaly(
                         db,
-                        type="CROWD_DETECTED",
+                        type="BILLING_QUEUE_SPIKE",
                         severity="high",
                         message=f"Billing queue length exceeds limit ({active_billing}/{self.rules['checkout_queue_length']})",
                         event=e

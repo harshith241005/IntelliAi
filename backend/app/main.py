@@ -685,7 +685,7 @@ async def get_store_anomalies(id: Optional[str] = "STORE_BLR_002", db: DBManager
     queue_depth = metrics.get("queue_depth", 0)
     if queue_depth > 5:
         anomalies.append({
-            "type": "QUEUE_SPIKE",
+            "type": "BILLING_QUEUE_SPIKE",
             "severity": "CRITICAL",
             "message": f"Billing checkout queue length is currently extremely deep ({queue_depth} visitors)",
             "suggested_action": "Open express billing checkout counter #2 immediately",
