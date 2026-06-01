@@ -254,8 +254,8 @@ async def ingest_events(payload: Dict[str, Any], db: DBManager = Depends(get_db)
             event['message'] = f"Event {event['event_type']} processed"
             await sio.emit('event', event)
         
-        # Process for anomalies async
-        asyncio.create_task(anomaly_detector.process_batch(new_events, db))
+        # Process for anomalies inline to prevent API race conditions
+        await anomaly_detector.process_batch(new_events, db)
     
     return {
         "message": f"Successfully ingested {len(new_events)} new events. Skipped {skipped_count} duplicates. Failed {len(failed_events)} malformed events.",
@@ -580,11 +580,13 @@ async def get_store_funnel(id: Optional[str] = "STORE_BLR_002", db: DBManager = 
     billing = max(billing, int(browsers * 0.55))
     buyers = max(buyers, int(billing * 0.65))
     
-    # Strictly ensure funnel drops
+    # Strictly ensure funnel drops (each stage cannot exceed its predecessor)
+    if browsers > base_entries:
+        browsers = base_entries
     if billing > browsers:
-        billing = int(browsers * 0.7)
+        billing = browsers
     if buyers > billing:
-        buyers = int(billing * 0.8)
+        buyers = billing
         
     return {
         "steps": [

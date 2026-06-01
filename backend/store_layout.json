@@ -1,0 +1,75 @@
+{
+  "store_id": "STORE_BLR_002",
+  "name": "Brigade Road Store",
+  "zones": [
+    {
+      "name": "SKINCARE",
+      "camera": "CAM_ENTRY_01",
+      "polygon": [
+        [
+          100,
+          100
+        ],
+        [
+          300,
+          100
+        ],
+        [
+          300,
+          400
+        ],
+        [
+          100,
+          400
+        ]
+      ],
+      "description": "Skincare product aisle"
+    },
+    {
+      "name": "BILLING",
+      "camera": "CAM_ENTRY_01",
+      "polygon": [
+        [
+          500,
+          200
+        ],
+        [
+          800,
+          200
+        ],
+        [
+          800,
+          500
+        ],
+        [
+          500,
+          500
+        ]
+      ],
+      "description": "Checkout and billing queue"
+    }
+  ],
+  "entry_threshold": {
+    "CAM_ENTRY_01": {
+      "polygon": [
+        [
+          0,
+          500
+        ],
+        [
+          1000,
+          500
+        ],
+        [
+          1000,
+          600
+        ],
+        [
+          0,
+          600
+        ]
+      ],
+      "direction": "up"
+    }
+  }
+}
