@@ -75,10 +75,12 @@ class TestStoreIntelligenceAPI(unittest.TestCase):
         self.assertEqual(response.status_code, 202)
 
     def test_event_ingest_partial_success(self):
+        import uuid
+        test_event_id = str(uuid.uuid4())
         payload = {
             "events": [
                 {
-                    "event_id": "990e8400-e29b-41d4-a716-446655449900",
+                    "event_id": test_event_id,
                     "store_id": "STORE_BLR_002",
                     "camera_id": "CAM_ENTRY_01",
                     "visitor_id": "VIS_TEST01",

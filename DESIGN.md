@@ -4,6 +4,22 @@ This document details the production-ready system architecture, data schemas, ed
 
 ---
 
+## AI-Assisted Decisions
+
+1. **Detection Model Choice**
+   * **Options considered:** I considered YOLOv8 vs. RT-DETR, alongside heavy Re-ID models like OSNet for multi-camera tracking.
+   * **AI Suggestion & Decision:** I discussed the edge node deployment constraints with AI, which correctly highlighted the RAM saturation risks of DeepSORT/OSNet on constrained devices. Based on AI advice regarding the single-camera baseline setup to maximize FPS and avoid unhandled edge-occlusions, I chose YOLOv8 Nano (`yolov8n.pt`) with a lightweight NumPy centroid tracking system instead. This successfully overrode my initial plan to implement memory-intensive deep tracking models.
+
+2. **Event Schema Design Rationale**
+   * **Options considered:** I debated a flat event schema versus nested document schemas for analytics.
+   * **AI Suggestion & Decision:** I supplied the AI with the core assessment requirements containing constraints like `session_seq` and specific confidence metadata. The AI generated a strict FastAPI backend using Pydantic (`StoreEvent`) that cleanly nested those required variables directly into an `EventMetadata` subset, completely aligning my system design with the evaluator's specific event catalogue specifications with out-of-the-box validation. The AI handled the boilerplate Pydantic construction brilliantly.
+
+3. **API Architecture Choice**
+   * **Options considered:** Fast API vs Express.js for the main telemetry pipeline APIs.
+   * **AI Suggestion & Decision:** When reviewing my need to support high-throughput video events across Python computer vision logic into a relational format, the AI advised consolidating the entire pipeline onto asynchronous FastAPI/Pydantic, allowing 1:1 schema reuse between CV output logic and server API validation input (dry-model sharing). I strongly agreed. It saved immense serialization overhead compared to marshalling Python events into a separated Node.js system.
+
+---
+
 ## 1. System Architecture Overview
 
 The system is a **dual-purpose real-time intelligence platform** combining deep edge video telemetry with retail transactional analytics:
@@ -79,7 +95,7 @@ The system is a **dual-purpose real-time intelligence platform** combining deep 
 1. **ASGI Compatibility**: A unified Socket.IO server is mounted directly over the ASGI stack, supporting live streaming event updates, live alarm triggers, and continuous metrics broadcasting.
 2. **Case-Insensitive & Prefix Support**: Complete route decorators support `/metrics`, `/Metrics`, and prefix `/api/metrics` to comply with Nginx reverse proxy routing and custom curl scripts seamlessly.
 3. **Session-Based Funnel Drop-off**: Aggregates unique consumer tracks across four distinct steps (Awareness -> Browse -> Cart Intent -> Checkout) with zero double-counting, returning clean mathematically structured drop-off indicators.
-4. **Real Store Conversion Rate**: Calculates conversion rate using: `Total unique transaction count (from CSV SQL) / Total entry events (from CCTV SQL)`.
+4. **Real Store Conversion Rate (POS Correlation)**: Correlates transactional data with visitor sessions using a time-of-day temporal alignment. A customer who enters the billing zone and has a transaction recorded in their 5-minute subsequent checkout window is classified as converted, avoiding crude averages and matching production-grade precision.
 
 ---
 

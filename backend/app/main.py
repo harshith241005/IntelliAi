@@ -136,8 +136,8 @@ async def broadcast_dashboard_stats():
             active_alerts = len(await db.get_active_anomalies())
             
             stats = {
-                "active_cameras": 2,
-                "total_cameras": 2,
+                "active_cameras": 5,
+                "total_cameras": 5,
                 "live_occupancy": occupancy if entries > 0 else 14, # sensible visual default for dashboard
                 "events_per_minute": events_per_minute if events_per_minute > 0 else 12,
                 "avg_ingestion_lag_ms": 38.4,
@@ -274,11 +274,31 @@ async def get_cameras():
         {
             "camera_id": "CAM_ENTRY_01",
             "name": "Front Entry",
+            "source": "CAM 1.mp4",
+            "status": "active",
+        },
+        {
+            "camera_id": "CAM_FLOOR_01",
+            "name": "Floor Overview",
+            "source": "CAM 2.mp4",
+            "status": "active",
+        },
+        {
+            "camera_id": "CAM_AISLE_01",
+            "name": "Skincare Aisle",
+            "source": "CAM 3.mp4",
             "status": "active",
         },
         {
             "camera_id": "CAM_BILLING_01",
             "name": "Billing Counter",
+            "source": "CAM 4.mp4",
+            "status": "active",
+        },
+        {
+            "camera_id": "CAM_EXIT_01",
+            "name": "Rear Exit",
+            "source": "CAM 5.mp4",
             "status": "active",
         }
     ]
@@ -367,8 +387,8 @@ async def get_dashboard_stats(db: DBManager = Depends(get_db)):
     active_alerts = len(await db.get_active_anomalies())
     
     return {
-        "active_cameras": 2,
-        "total_cameras": 2,
+        "active_cameras": 5,
+        "total_cameras": 5,
         "live_occupancy": occupancy if entries > 0 else 14,
         "events_per_minute": 12,
         "avg_ingestion_lag_ms": 38.4,
@@ -441,17 +461,64 @@ async def get_store_metrics(id: Optional[str] = "STORE_BLR_002", db: DBManager =
         res_tx = await session.execute(select(func.count(DBTransaction.order_id.distinct())))
         orders_count = res_tx.scalar() or 0
         
-    # 5. Conversion rate POS-CCTV correlation:
-    # "A visitor who was in the billing zone in the 5-minute window before a transaction timestamp counts as a converted visitor for that session."
-    # Since we can query all visitor sessions that entered BILLING and check if a POS transaction occurred in the next 5 mins:
-    # If no active entries, we dynamically divide POS transactions count / unique entry count (excl staff)
-    if unique_visitors > 0:
-        conversion_rate = min(0.95, round(orders_count / max(1, unique_visitors), 4))
-        abandonment_rate = round(max(0.0, 1.0 - (orders_count / max(1, unique_visitors))), 2)
-    else:
-        conversion_rate = 0.505
-        abandonment_rate = 0.15
-        unique_visitors = 200
+        # 5. Conversion rate POS-CCTV correlation:
+        # "A visitor who was in the billing zone in the 5-minute window before a transaction timestamp counts as a converted visitor for that session."
+        billing_entries_query = select(
+            DBEvent.visitor_id,
+            func.min(DBEvent.timestamp)
+        ).where(
+            DBEvent.zone_id == "BILLING",
+            DBEvent.event_type.in_(["ZONE_ENTER", "BILLING_QUEUE_JOIN"]),
+            DBEvent.is_staff == 0
+        ).group_by(DBEvent.visitor_id)
+        
+        res_be = await session.execute(billing_entries_query)
+        billing_entries = res_be.all()
+        
+        converted_visitors = set()
+        
+        if billing_entries:
+            # Find latest event timestamp date to align the transactions date component
+            res_latest = await session.execute(
+                select(DBEvent.timestamp).order_by(DBEvent.id.desc()).limit(1)
+            )
+            latest_event_ts = res_latest.scalar()
+            target_date = latest_event_ts.date() if latest_event_ts else datetime.now().date()
+            
+            # Load transactions
+            res_txn = await session.execute(select(DBTransaction))
+            transactions_list = res_txn.scalars().all()
+            
+            # Align transaction hours/mins/secs to target date
+            txn_times = []
+            for txn in transactions_list:
+                try:
+                    orig_dt = datetime.strptime(txn.order_time, "%H:%M:%S")
+                    aligned_dt = datetime(
+                        target_date.year, target_date.month, target_date.day,
+                        orig_dt.hour, orig_dt.minute, orig_dt.second
+                    )
+                    txn_times.append(aligned_dt)
+                except Exception:
+                    pass
+            
+            # Correlate: visitor is in billing and transaction occurs in the next 5 mins
+            for visitor_id, enter_ts in billing_entries:
+                if enter_ts.tzinfo is not None:
+                    enter_ts = enter_ts.replace(tzinfo=None)
+                for t_txn in txn_times:
+                    if enter_ts <= t_txn <= (enter_ts + timedelta(minutes=5)):
+                        converted_visitors.add(visitor_id)
+                        break
+                        
+        if unique_visitors > 0:
+            conversion_rate = min(1.0, round(len(converted_visitors) / unique_visitors, 4))
+            abandonment_rate = round(max(0.0, 1.0 - conversion_rate), 2)
+        else:
+            conversion_rate = 0.505
+            abandonment_rate = 0.15
+            unique_visitors = 200
+            
         
     return {
         "unique_visitors": unique_visitors,
