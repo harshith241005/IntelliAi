@@ -15,9 +15,16 @@ export const Analytics: React.FC = () => {
   useEffect(() => {
     fetch('/api/dashboard/heatmap')
       .then((r) => r.json())
-      .then(setHeatmap)
+      .then((data) => {
+        if (Array.isArray(data)) {
+          setHeatmap(data);
+        } else if (data && Array.isArray(data.heatmap)) {
+          setHeatmap(data.heatmap);
+        }
+      })
       .catch(() => {});
   }, []);
+
 
   return (
     <div className="space-y-6">

@@ -37,7 +37,7 @@ services:
       - ./backend:/app
       - ./resources:/app/resources
     # Headless execution configuration
-    command: python runner.py --source "/app/resources/CAM 1.mp4" --api http://backend:5000/api/events/ingest --display false
+    command: python runner.py --source "/app/resources/Store 1/CAM 3 - entry.mp4" --api http://backend:5000/api/events/ingest --display false
     depends_on:
       backend:
         condition: service_healthy

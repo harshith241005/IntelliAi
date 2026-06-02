@@ -96,8 +96,10 @@ The system is a **dual-purpose real-time intelligence platform** combining deep 
 2. **Case-Insensitive & Prefix Support**: Complete route decorators support `/metrics`, `/Metrics`, and prefix `/api/metrics` to comply with Nginx reverse proxy routing and custom curl scripts seamlessly.
 3. **Session-Based Funnel Drop-off**: Aggregates unique consumer tracks across four distinct steps (Awareness -> Browse -> Cart Intent -> Checkout) with zero double-counting, returning clean mathematically structured drop-off indicators.
 4. **Real Store Conversion Rate (POS Correlation)**: Correlates transactional data with visitor sessions using a time-of-day temporal alignment. A customer who enters the billing zone and has a transaction recorded in their 5-minute subsequent checkout window is classified as converted, avoiding crude averages and matching production-grade precision.
+5. **Heatmap Normalization & Data Confidence**: Normalizes zone visit density and average dwell time onto a 0–100 scale. It dynamically returns a `data_confidence` flag (evaluating to false if fewer than 20 sessions are present in the dataset window) to warn down-stream client services of low-sample sizes.
 
 ---
+
 
 ## 3. Observability & Alarm Center
 - **System Metrics**: Server and edge operations are continuously exposed via `/api/dashboard/metrics` and `/api/dashboard/stats`.

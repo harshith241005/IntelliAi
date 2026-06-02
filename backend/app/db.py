@@ -26,6 +26,7 @@ class DBEvent(Base):
     id = Column(Integer, primary_key=True, index=True)
     event_id = Column(String, unique=True, index=True)
     timestamp = Column(DateTime)
+    store_id = Column(String, nullable=True, index=True)
     camera_id = Column(String)
     event_type = Column(String, index=True)
     visitor_id = Column(String, nullable=True)
@@ -75,8 +76,8 @@ class DBManager:
                 return []
             
             columns = await conn.run_sync(get_columns)
-            if columns and "is_staff" not in columns:
-                logger.info("Schema migration: events table exists but lacks is_staff column. Dropping old schema.")
+            if columns and ("is_staff" not in columns or "store_id" not in columns):
+                logger.info("Schema migration: events table exists but lacks is_staff or store_id column. Dropping old schema.")
                 await conn.run_sync(Base.metadata.drop_all)
                 
             await conn.run_sync(Base.metadata.create_all)
@@ -88,13 +89,25 @@ class DBManager:
     async def load_transactions_csv(self):
         import pandas as pd
         from sqlalchemy import select, func
+        import glob
         
-        csv_path = "./data/transactions.csv"
+        csv_path = None
+        # Try to find new POS csv in resources
+        for base in [".", "..", "backend", "../backend"]:
+            path_pattern = os.path.join(base, "resources", "POS - sample transactions*.csv")
+            matches = glob.glob(path_pattern)
+            if matches:
+                csv_path = matches[0]
+                break
+                
+        if not csv_path:
+            # Fallback to backend/data/transactions.csv
+            csv_path = "./data/transactions.csv"
+            if not os.path.exists(csv_path):
+                csv_path = "backend/data/transactions.csv"
+                
         if not os.path.exists(csv_path):
-            csv_path = "backend/data/transactions.csv"
-            
-        if not os.path.exists(csv_path):
-            logger.warning(f"transactions.csv not found at {csv_path}. Dynamic retail orders metrics will fall back to defaults.")
+            logger.warning(f"Transactions CSV not found at {csv_path}. Dynamic retail orders metrics will fall back to defaults.")
             return
             
         async with AsyncSessionLocal() as session:
@@ -108,19 +121,41 @@ class DBManager:
             try:
                 # Load CSV using pandas
                 df = pd.read_csv(csv_path)
-                logger.info(f"Loaded {len(df)} transaction rows from CSV.")
+                logger.info(f"Loaded {len(df)} transaction rows from CSV {csv_path}.")
                 
                 # Insert rows into database
                 for _, row in df.iterrows():
+                    p_name = row.get("product_name")
+                    if pd.isna(p_name) or p_name is None:
+                        p_name = row.get("product_id")
+                    if pd.isna(p_name) or p_name is None:
+                        p_name = "Unknown Product"
+                        
+                    qty_val = row.get("qty", 1)
+                    if pd.isna(qty_val):
+                        qty_val = 1
+                        
+                    dep_val = row.get("dep_name", "Cosmetics")
+                    if pd.isna(dep_val):
+                        dep_val = "Cosmetics"
+                        
+                    sp_val = row.get("salesperson_name", "Sales Associate")
+                    if pd.isna(sp_val):
+                        sp_val = "Sales Associate"
+                        
+                    brand_val = row.get("brand_name", "Generic")
+                    if pd.isna(brand_val):
+                        brand_val = "Generic"
+                        
                     db_trans = DBTransaction(
                         order_id=str(row.get("order_id")),
                         order_date=str(row.get("order_date")),
                         order_time=str(row.get("order_time")),
-                        product_name=str(row.get("product_name")),
-                        brand_name=str(row.get("brand_name")),
-                        dep_name=str(row.get("dep_name")),
-                        salesperson_name=str(row.get("salesperson_name")),
-                        qty=int(row.get("qty", 1)),
+                        product_name=str(p_name),
+                        brand_name=str(brand_val),
+                        dep_name=str(dep_val),
+                        salesperson_name=str(sp_val),
+                        qty=int(qty_val),
                         total_amount=float(row.get("total_amount", 0.0))
                     )
                     session.add(db_trans)
@@ -144,6 +179,7 @@ class DBManager:
                 db_event = DBEvent(
                     event_id=e["event_id"],
                     timestamp=ts,
+                    store_id=e.get("store_id"),
                     camera_id=e["camera_id"],
                     event_type=e["event_type"],
                     visitor_id=e.get("visitor_id"),

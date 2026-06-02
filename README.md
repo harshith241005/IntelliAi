@@ -24,13 +24,13 @@ git clone <repo-url> && cd store-intelligence
 docker compose up --build -d
 
 # 3. Process a sample video clip through the Edge AI pipeline
-docker compose run --rm pipeline python runner.py --camera CAM_ENTRY_01 --source "/app/resources/CAM 1.mp4" --api http://backend:5000/api/events/ingest --display false
+docker compose run --rm pipeline python runner.py --camera CAM_ENTRY_01 --source "/app/resources/Store 1/CAM 3 - entry.mp4" --api http://backend:5000/api/events/ingest --display false
 
 # 4. Verify system health and lag warnings
 curl http://localhost:5000/api/health
 
 # 5. Retrieve dynamic store business metrics
-curl http://localhost:5000/api/stores/STORE_BLR_002/metrics
+curl http://localhost:5000/api/stores/ST1008/metrics
 ```
 
 ---
@@ -46,7 +46,7 @@ venv\Scripts\activate   # On Windows
 source venv/bin/activate # On Unix
 
 # 2. Run the pipeline against a sample CCTV clip mapping to the API
-python runner.py --camera CAM_ENTRY_01 --source "../resources/CAM 1.mp4" --api http://localhost:5000/api/events/ingest --display false
+python runner.py --camera CAM_ENTRY_01 --source "../resources/Store 1/CAM 3 - entry.mp4" --api http://localhost:5000/api/events/ingest --display false
 ```
 *Telemetries and event logs will stream in real time directly to the console, archive into the SQLite database, and broadcast instantly via Socket.IO to the React dashboard at `http://localhost:3000`.*
 

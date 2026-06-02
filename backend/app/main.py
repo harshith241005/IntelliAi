@@ -642,6 +642,15 @@ async def get_store_heatmap(id: Optional[str] = "STORE_BLR_002", db: DBManager =
         result = await session.execute(query)
         rows = result.all()
         
+        res_uv = await session.execute(
+            select(func.count(DBEvent.visitor_id.distinct())).where(
+                DBEvent.event_type == 'ENTRY',
+                DBEvent.is_staff == 0
+            )
+        )
+        unique_sessions = res_uv.scalar() or 0
+        data_confidence = unique_sessions >= 20
+        
     heatmap = []
     for r in rows:
         zone, density, dwell = r
@@ -669,7 +678,11 @@ async def get_store_heatmap(id: Optional[str] = "STORE_BLR_002", db: DBManager =
     if "BILLING" not in present_zones:
         heatmap.append({"zone": "BILLING", "density": 35, "dwell": 85, "level": "medium"})
         
-    return heatmap
+    return {
+        "data_confidence": data_confidence,
+        "heatmap": heatmap
+    }
+
 
 @app.get("/stores/{id}/anomalies")
 @app.get("/api/stores/{id}/anomalies")
